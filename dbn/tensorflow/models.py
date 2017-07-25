@@ -136,6 +136,7 @@ class BinaryRBM(BaseBinaryRBM, BaseTensorFlowModel):
         Builds TensorFlow model.
         :return:
         """
+        print('Testing build print \n')
         # initialize weights and biases
         self._initialize_weights(weights)
 
