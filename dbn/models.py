@@ -45,6 +45,7 @@ class BinaryRBM(BaseEstimator, TransformerMixin, BaseModel):
         self.contrastive_divergence_iter = contrastive_divergence_iter
         self.batch_size = batch_size
         self.verbose = verbose
+        self.error_values = list()
 
     def fit(self, X):
         """
@@ -69,7 +70,7 @@ class BinaryRBM(BaseEstimator, TransformerMixin, BaseModel):
             raise ValueError("Invalid activation function.")
 
         if self.optimization_algorithm == 'sgd':
-            self._stochastic_gradient_descent(X)
+            self.error_values = self._stochastic_gradient_descent(X)
         else:
             raise ValueError("Invalid optimization algorithm.")
         return self
@@ -102,6 +103,7 @@ class BinaryRBM(BaseEstimator, TransformerMixin, BaseModel):
         accum_delta_W = np.zeros(self.W.shape)
         accum_delta_b = np.zeros(self.b.shape)
         accum_delta_c = np.zeros(self.c.shape)
+        layer_wise_error = list()
         for iteration in range(1, self.n_epochs + 1):
             idx = np.random.permutation(len(_data))
             data = _data[idx]
@@ -119,7 +121,9 @@ class BinaryRBM(BaseEstimator, TransformerMixin, BaseModel):
                 self.c += self.learning_rate * (accum_delta_c / self.batch_size)
             if self.verbose:
                 error = self._compute_reconstruction_error(data)
+                layer_wise_error.append(error)
                 print(">> Epoch %d finished \tRBM Reconstruction error %f" % (iteration, error))
+        return layer_wise_error
 
     def _contrastive_divergence(self, vector_visible_units):
         """
@@ -213,9 +217,9 @@ class BinaryRBM(BaseEstimator, TransformerMixin, BaseModel):
         :param data: array-like, shape = (n_samples, n_features)
         :return:
         """
-        data_transformed = self.transform(data)
-        data_reconstructed = self._reconstruct(data_transformed)
-        return np.mean(np.sum((data_reconstructed - data) ** 2, 1))
+        data_transformed = self.transform(data) # Compute hidden layer given data => Sample from p(h | v)
+        data_reconstructed = self._reconstruct(data_transformed) # Get back the visible layer from the hidden layer
+        return np.mean(np.sum((data_reconstructed - data) ** 2, 1)) # Squared error is the metric used
 
 
 class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
@@ -242,6 +246,7 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
         self.rbm_layers = None
         self.verbose = verbose
         self.rbm_class = BinaryRBM
+        self.layer_wise_error = list()
 
     def fit(self, X, y=None):
         """
@@ -268,6 +273,7 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
         input_data = X
         for rbm in self.rbm_layers:
             rbm.fit(input_data)
+            self.layer_wise_error.append(rbm.error_values) # Layer-wise training metrics
             input_data = rbm.transform(input_data)
         if self.verbose:
             print("[END] Pre-training step")
@@ -283,6 +289,25 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
         for rbm in self.rbm_layers:
             input_data = rbm.transform(input_data)
         return input_data
+
+    # Function to compute reconstruction accuracy over the DBN
+    def reconstruction_accuracy(self,X):
+        recon_error = list()
+        for data in X:
+            data_trans = data
+            # Forward Pass (inference)
+            for rbm in self.rbm_layers:
+                data_trans = rbm.transform(data_trans)
+
+            data_recon = data_trans
+            # Backward pass (reconstruction)
+            for rbm in reversed(self.rbm_layers):
+                data_recon = rbm._reconstruct(data_recon)
+            sample_recon_error = np.mean(np.sum((data_recon - data) ** 2, 1))
+            print ('Reconstruction Accuracy for test image : {0:.3f}'.format(sample_recon_error))
+            recon_error.append(sample_recon_error)
+        return recon_error
+
 
 
 class AbstractSupervisedDBN(BaseEstimator, BaseModel):
