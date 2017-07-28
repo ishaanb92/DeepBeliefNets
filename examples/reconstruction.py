@@ -77,10 +77,11 @@ X_train, X_test, Y_train, Y_test = train_test_split(X, Y,
 
 # Models we will use
 dbn = UnsupervisedDBN(hidden_layers_structure=[256, 512],
-                      batch_size=10,
+                      batch_size=32,
                       learning_rate_rbm=0.06,
-                      n_epochs_rbm=20,
-                      activation_function='sigmoid')
+                      n_epochs_rbm=100,
+                      activation_function='sigmoid',
+                      contrastive_divergence_iter = 10)
 
 ###############################################################################
 
