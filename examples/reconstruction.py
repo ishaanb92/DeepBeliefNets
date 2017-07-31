@@ -78,8 +78,8 @@ X_train, X_test, Y_train, Y_test = train_test_split(X, Y,
 # Models we will use
 dbn = UnsupervisedDBN(hidden_layers_structure=[256, 512],
                       batch_size=32,
-                      learning_rate_rbm=0.06,
-                      n_epochs_rbm=100,
+                      learning_rate_rbm=0.01,
+                      n_epochs_rbm=150,
                       activation_function='sigmoid',
                       contrastive_divergence_iter = 10)
 
@@ -96,7 +96,10 @@ for layer_wise_error,index in zip(dbn.layer_wise_error,range(len(dbn.layer_wise_
 ###############################################################################
 # Evaluation for test samples
 error = dbn.reconstruction_accuracy(X_test)
+error_train = dbn.reconstruction_accuracy(X_train)
 # Save the test sample errors
 with io.open("test_recon", 'wb') as f:
     pickle.dump(error,f)
+with io.open("train_recon",'wb') as f:
+    pickle(error_train,f)
 

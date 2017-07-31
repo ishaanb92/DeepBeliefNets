@@ -290,19 +290,24 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
             input_data = rbm.transform(input_data)
         return input_data
 
+    # Function to create reconstructed representation at the visible layer
+    # given an input
+    def reconstruct(self,sample):
+        data_trans = sample
+        # Forward Pass (inference)
+        for rbm in self.rbm_layers:
+            data_trans = rbm.transform(data_trans)
+        data_recon = data_trans
+        # Backward pass (reconstruction)
+        for rbm in reversed(self.rbm_layers):
+            data_recon = rbm._reconstruct(data_recon)
+        return data_recon
+
     # Function to compute reconstruction accuracy over the DBN
     def reconstruction_accuracy(self,X):
         recon_error = list()
         for data in X:
-            data_trans = data
-            # Forward Pass (inference)
-            for rbm in self.rbm_layers:
-                data_trans = rbm.transform(data_trans)
-
-            data_recon = data_trans
-            # Backward pass (reconstruction)
-            for rbm in reversed(self.rbm_layers):
-                data_recon = rbm._reconstruct(data_recon)
+            data_recon = reconstruct(data)
             sample_recon_error = np.mean(np.sum((data_recon - data) ** 2, 1))
             print ('Reconstruction Accuracy for test image : {0:.3f}'.format(sample_recon_error))
             recon_error.append(sample_recon_error)
