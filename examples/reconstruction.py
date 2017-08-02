@@ -75,13 +75,19 @@ X_train, X_test, Y_train, Y_test = train_test_split(X, Y,
                                                     test_size=0.2,
                                                     random_state=0)
 
+print('X_train size : {0} \n'.format(X_train.shape))
+print('X_test size : {0} \n'.format(X_test.shape))
+
+
 # Models we will use
 dbn = UnsupervisedDBN(hidden_layers_structure=[256, 512],
                       batch_size=32,
-                      learning_rate_rbm=0.01,
-                      n_epochs_rbm=150,
+                      learning_rate_rbm=0.06,
+                      learning_rate_backprop = 1e-3,
+                      n_epochs_rbm=50,
+                      n_epochs_fine_tune = 500,
                       activation_function='sigmoid',
-                      contrastive_divergence_iter = 10)
+                      contrastive_divergence_iter = 1)
 
 ###############################################################################
 
@@ -92,6 +98,14 @@ for layer_wise_error,index in zip(dbn.layer_wise_error,range(len(dbn.layer_wise_
     with io.open("layer_" + str(index), 'wb') as f:
         pickle.dump(layer_wise_error,f)
 
+# Fine tune the DBN using the reconstruction MSE (over pixels)
+recon_error_test,recon_error_train = dbn.fine_tune(X_train,X_test)
+# Save fine tuned parameters
+with io.open("test_recon_finetune", 'wb') as f:
+    pickle.dump(recon_error_test,f)
+
+with io.open("train_recon_finetune",'wb') as f:
+    pickle(recon_error_train,f)
 
 ###############################################################################
 # Evaluation for test samples

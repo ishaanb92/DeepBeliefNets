@@ -232,7 +232,9 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
                  activation_function='sigmoid',
                  optimization_algorithm='sgd',
                  learning_rate_rbm=1e-3,
+                 learning_rate_backprop = 1e-3,
                  n_epochs_rbm=10,
+                 n_epochs_fine_tune = 100,
                  contrastive_divergence_iter=1,
                  batch_size=32,
                  verbose=True):
@@ -240,7 +242,9 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
         self.activation_function = activation_function
         self.optimization_algorithm = optimization_algorithm
         self.learning_rate_rbm = learning_rate_rbm
+        self.learning_rate_backprop = learning_rate_backprop
         self.n_epochs_rbm = n_epochs_rbm
+        self.n_epochs_fine_tune = n_epochs_fine_tune
         self.contrastive_divergence_iter = contrastive_divergence_iter
         self.batch_size = batch_size
         self.rbm_layers = None
@@ -248,6 +252,8 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
         self.rbm_class = BinaryRBM
         self.layer_wise_error = list()
 
+    # Performs greedy layer wise training
+    # SGD using contrastive divergence (unsupervised)
     def fit(self, X, y=None):
         """
         Fits a model given data.
@@ -305,13 +311,88 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
 
     # Function to compute reconstruction accuracy over the DBN
     def reconstruction_accuracy(self,X):
+        # Returns : List of per-sample reconstruction errors given an array of samples
         recon_error = list()
         for data in X:
-            data_recon = reconstruct(data)
+            data_recon = self.reconstruct(data)
             sample_recon_error = np.mean(np.sum((data_recon - data) ** 2, 1))
-            print ('Reconstruction Accuracy for test image : {0:.3f}'.format(sample_recon_error))
             recon_error.append(sample_recon_error)
         return recon_error
+
+    # Given a pre-training network, use the MSE between original and reconstructed pixels
+    # to fine tune parameters using backprop
+    def fine_tune(self,X_train,X_test):
+        mean_error_train = list()
+        mean_error_test = list()
+        for step in range(1,self.n_epochs_fine_tune + 1): # Outer most loop for epochs
+            idx = np.random.permutation(len(X_train))
+            data = X_train[idx]
+            for batch in batch_generator(self.batch_size,data):
+                delta_W,delta_b = self.backProp(batch)
+                # Update weights/biases
+                for dW,db,rbm in zip(reversed(delta_W),reversed(delta_b),(self.rbm_layers)):
+                    rbm.W = rbm.W - self.learning_rate_backprop*dW.transpose()
+                    rbm.b = rbm.b - self.learning_rate_backprop*db
+            # Check reconstruction error every epoch
+            recon_error_train = self.reconstruction_accuracy(X_train)
+            recon_error_test = self.reconstruction_accuracy(X_test)
+            mean_error_train.append(np.mean(recon_error_train))
+            mean_error_test.append(np.mean(recon_error_test))
+            print('Epoch {0} train error : {1:.2f} \n'.format(step,np.mean(recon_error_train)))
+            print('Epoch {0} test error : {1:.2f} \n'.format(step,np.mean(recon_error_test)))
+        return recon_error_train,recon_error_test
+
+
+    def backProp(self,batch):
+        # Returns : List of (layer-wise) updates
+        # Initialize to 0
+        for rbm in reversed(self.rbm_layers):
+            accuW = [np.zeros(rbm.W.transpose().shape)] # List of weight updates, each element in the list updates one RBM layer within the DBN.
+            accuB = [np.zeros(rbm.b.shape)] # visible layer bias
+        for sample in batch:
+            activations = list() # Capturing layer-wise activations
+            zs = list() # Layer-wise inputs
+            dataTransform = sample
+            for rbm in self.rbm_layers:
+                dataTransform = rbm.transform(dataTransform)
+            dataRecon = dataTransform
+            activations.append(dataTransform) # First layer
+            # Store activations needed for computations
+            # [Hn Hn-1 .....V] : Order of stored activations/weighted inputs
+            for rbm in reversed(self.rbm_layers):
+                z = np.dot((rbm.W).transpose(),dataRecon) + rbm.b
+                # Weird numpy magic. Works !
+                dataRecon = rbm._reconstruct(dataRecon.transpose())
+                dataRecon = np.squeeze(dataRecon.transpose())
+                activations.append(dataRecon)
+                zs.append(z)
+            # Backward Pass (V -> H)
+            delta = (activations[-1] - sample)*self.sigmoid_prime(zs[-1])
+            accuB[-1] += delta
+            accuW[-1] += np.outer(delta,activations[-2])
+            for l in range(2, len(self.rbm_layers)):
+                z = zs[-l]
+                sp = sigmoid_prime(z)
+                delta = np.dot(self.rbm_layers[-l+1].W, delta)*sp
+                accuB[-l] += delta
+                accuW[-l] += np.outer(delta,activations[-l+1])
+        # Take average over all samples
+        for W,b in zip(accuW,accuB):
+            W = W/float(self.batch_size)
+            b = b/float(self.batch_size)
+        return accuW,accuB
+
+    # Helper functions to compute sigmoid and it's derivate
+    def sigmoid(self,z):
+        return 1.0/(1.0+np.exp(-z))
+
+    def sigmoid_prime(self,z):
+        return self.sigmoid(z)*(1-self.sigmoid(z))
+
+    # Helper function to compute MSE (useful to monitor training progress)
+
+
+
 
 
 
