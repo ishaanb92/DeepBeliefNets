@@ -100,20 +100,12 @@ for layer_wise_error,index in zip(dbn.layer_wise_error,range(len(dbn.layer_wise_
 
 # Fine tune the DBN using the reconstruction MSE (over pixels)
 recon_error_test,recon_error_train = dbn.fine_tune(X_train,X_test)
+
 # Save fine tuned parameters
 with io.open("test_recon_finetune", 'wb') as f:
     pickle.dump(recon_error_test,f)
 
 with io.open("train_recon_finetune",'wb') as f:
-    pickle(recon_error_train,f)
+    pickle.dump(recon_error_train,f)
 
-###############################################################################
-# Evaluation for test samples
-error = dbn.reconstruction_accuracy(X_test)
-error_train = dbn.reconstruction_accuracy(X_train)
-# Save the test sample errors
-with io.open("test_recon", 'wb') as f:
-    pickle.dump(error,f)
-with io.open("train_recon",'wb') as f:
-    pickle(error_train,f)
 

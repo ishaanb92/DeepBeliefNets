@@ -389,12 +389,6 @@ class UnsupervisedDBN(BaseEstimator, TransformerMixin, BaseModel):
     def sigmoid_prime(self,z):
         return self.sigmoid(z)*(1-self.sigmoid(z))
 
-    # Helper function to compute MSE (useful to monitor training progress)
-
-
-
-
-
 
 class AbstractSupervisedDBN(BaseEstimator, BaseModel):
     """
